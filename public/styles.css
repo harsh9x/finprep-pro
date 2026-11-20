@@ -163,7 +163,8 @@ a.card:hover, button.card:hover { transform: scale(1.012); box-shadow: var(--sha
   border: 0; background: none; padding: 7px 16px; border-radius: 8px; cursor: pointer;
   font-size: 14px; color: var(--text-2); white-space: nowrap; transition: all .2s;
 }
-.segmented button.on, .segmented a.on { background: var(--card); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,.12); font-weight: 500; }
+.segmented button.on, .segmented a.on { background: var(--accent); color: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.18); font-weight: 600; }
+.segmented button:not(.on):hover, .segmented a:not(.on):hover { color: var(--text); }
 
 .chips { display: flex; gap: 8px; flex-wrap: wrap; }
 .chip {
