@@ -45,11 +45,11 @@ export async function onRequestPost({ request, env }) {
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
         method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY }, body: payload,
       });
-      if (!res.ok) continue;
+      if (!res.ok) { console.error(`gemini ${model} ${res.status}: ${(await res.text()).slice(0, 300)}`); continue; }
       const data = await res.json();
       const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("") || "";
       if (text) return json({ text });
-    } catch {}
+    } catch (e) { console.error(`gemini ${model} fetch failed: ${e.message}`); }
   }
   return json({ error: "The AI is busy right now. Try again in a moment." }, 502);
 }
