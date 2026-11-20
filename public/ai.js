@@ -1,14 +1,28 @@
-// Gemini client. The visitor's own key stays in their browser and is sent only to Google.
+// Gemini client. Uses the visitor's own key if they've added one (stored only in this browser, sent only to Google);
+// otherwise uses the site's shared, rate-limited proxy at /api/ai.
 const KEY = "finprep.geminiKey";
 const MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"];
 
 export const getKey = () => { try { return localStorage.getItem(KEY) || ""; } catch { return ""; } };
 export const setKey = k => { try { k ? localStorage.setItem(KEY, k) : localStorage.removeItem(KEY); } catch {} };
 
+let shared;
+/** Whether the site's shared AI is available (cached for the page's life). */
+export function sharedAI() {
+  shared ??= fetch("/api/ai").then(r => r.ok ? r.json() : { enabled: false }).then(j => !!j.enabled).catch(() => false);
+  return shared;
+}
+export const aiAvailable = async () => !!getKey() || await sharedAI();
+
 /** messages: [{ role: "user" | "model", text }] */
 export async function askGemini(messages, system) {
-  const key = getKey();
-  if (!key) throw new Error("Add a Gemini API key in Settings first.");
+  if (!getKey()) {
+    if (!(await sharedAI())) throw new Error("Add a free Gemini API key in Settings to use AI.");
+    const res = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages, system }) });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || !j.text) throw new Error(j.error || "The AI is busy right now. Try again in a moment.");
+    return j.text;
+  }
   const body = JSON.stringify({
     systemInstruction: { parts: [{ text: system }] },
     contents: messages.map(m => ({ role: m.role === "user" ? "user" : "model", parts: [{ text: m.text }] })),
@@ -18,7 +32,7 @@ export async function askGemini(messages, system) {
     try {
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+        headers: { "Content-Type": "application/json", "x-goog-api-key": getKey() },
         body,
       });
       const json = await res.json();

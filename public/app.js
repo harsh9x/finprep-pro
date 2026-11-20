@@ -1,5 +1,5 @@
 import { depreciation, dcf, ccc, lbo, bva, analyzeResume, offlineNotes, parseFlashcards } from "./finance.js";
-import { askGemini, getKey, setKey } from "./ai.js";
+import { askGemini, getKey, setKey, aiAvailable } from "./ai.js";
 
 const $ = (s, el = document) => el.querySelector(s);
 const app = $("#app");
@@ -211,15 +211,23 @@ const LABS = {
   },
   dcf: {
     name: "DCF", title: "Five-year DCF",
-    blurb: "An unlevered DCF with a Gordon growth terminal value. Base revenue is $100M.",
+    blurb: "An unlevered DCF with a Gordon growth terminal value. Open Advanced to model a specific company.",
     sliders: [
       { id: "g", label: "Revenue growth", min: 0, max: 0.3, step: 0.005, value: 0.08, fmt: pct },
       { id: "m", label: "EBIT margin", min: 0.05, max: 0.5, step: 0.01, value: 0.2, fmt: pct },
       { id: "w", label: "WACC", min: 0.05, max: 0.15, step: 0.0025, value: 0.09, fmt: pct },
       { id: "tg", label: "Terminal growth", min: 0, max: 0.05, step: 0.0025, value: 0.025, fmt: pct },
+      { id: "base", label: "Base revenue", min: 10, max: 1000, step: 10, value: 100, fmt: usd, adv: true },
+      { id: "tax", label: "Tax rate", min: 0, max: 0.4, step: 0.01, value: 0.21, fmt: pct, adv: true },
+      { id: "cx", label: "Capex (% of revenue)", min: 0, max: 0.2, step: 0.005, value: 0.05, fmt: pct, adv: true },
+      { id: "nwc", label: "Change in NWC (% of revenue)", min: 0, max: 0.1, step: 0.005, value: 0.02, fmt: pct, adv: true },
+      { id: "da", label: "D&A (% of revenue)", min: 0, max: 0.15, step: 0.005, value: 0.04, fmt: pct, adv: true },
+      { id: "cash", label: "Cash", min: 0, max: 200, step: 5, value: 20, fmt: usd, adv: true },
+      { id: "debt", label: "Debt", min: 0, max: 300, step: 5, value: 40, fmt: usd, adv: true },
+      { id: "sh", label: "Shares outstanding", min: 1, max: 100, step: 1, value: 10, fmt: v => `${v}M`, adv: true },
     ],
-    render: ({ g, m, w, tg }) => {
-      const r = dcf({ growth: g, margin: m, wacc: w, tg });
+    render: ({ g, m, w, tg, base, tax, cx, nwc, da, cash, debt, sh }) => {
+      const r = dcf({ growth: g, margin: m, wacc: w, tg, base, tax, capex: cx, nwc, da, cash, debt, shares: sh });
       if (!r.valid) return `<div class="panel"><h3>Terminal growth must be below WACC</h3><p class="muted" style="margin-top:6px">Otherwise the Gordon growth formula divides by zero or a negative number, and the business is worth infinity.</p></div>`;
       return `
         <div class="stats">
@@ -235,7 +243,7 @@ const LABS = {
           <tr><td>Unlevered FCF</td>${r.rows.map(x => `<td>${x.fcf.toFixed(1)}</td>`).join("")}</tr>
           <tr class="total"><td>Present value</td>${r.rows.map(x => `<td>${x.pv.toFixed(1)}</td>`).join("")}</tr>
         </table></div>
-        <p class="note-line">Terminal value is ${r.tvPct.toFixed(0)}% of enterprise value. ${r.tvPct > 75 ? "That's high, so the valuation leans heavily on assumptions about the far future." : "That's within the normal 60–75% range."} Net debt of $20M and 10M shares are assumed.</p>`;
+        <p class="note-line">Terminal value is ${r.tvPct.toFixed(0)}% of enterprise value. ${r.tvPct > 75 ? "That's high, so the valuation leans heavily on assumptions about the far future." : "That's within the normal 60–75% range."} Net debt is ${money(debt - cash, 0)}M over ${sh}M shares.</p>`;
     },
   },
   ccc: {
@@ -330,10 +338,13 @@ function mountLab(k) {
   const l = LABS[k], el = $("#lab");
   el.innerHTML = `
     <div class="lab view">
-      <div class="panel"><h3>${l.title}</h3><p class="muted small" style="margin:6px 0 24px">${l.blurb}</p>${l.sliders.map(slider).join("")}</div>
+      <div class="panel"><h3>${l.title}</h3><p class="muted small" style="margin:6px 0 24px">${l.blurb}</p>${l.sliders.filter(d => !d.adv).map(slider).join("")}
+        ${l.sliders.some(d => d.adv) ? `<details class="adv"><summary>Advanced</summary><div style="margin-top:18px">${l.sliders.filter(d => d.adv).map(slider).join("")}</div></details>` : ""}
+        <button class="link-btn small" id="lab-reset" style="margin-top:6px">Reset</button></div>
       <div id="lab-out"></div>
     </div>`;
   bindSliders(el, l.sliders, v => { $("#lab-out", el).innerHTML = l.render(v); });
+  $("#lab-reset", el).onclick = () => mountLab(k);
 }
 
 /* Questions */
@@ -434,7 +445,7 @@ views.ask = () => {
     };
     const go = async text => {
       text = text.trim(); if (!text) return;
-      if (!getKey()) { openSettings(); toast("Add a Gemini key to use Ask AI"); return; }
+      if (!(await aiAvailable())) { openSettings(); toast("Add a Gemini key to use Ask AI"); return; }
       chat.push({ role: "user", text }); ta.value = ""; ta.style.height = ""; draw();
       box.insertAdjacentHTML("beforeend", `<div class="msg ai typing" id="typing"><span></span><span></span><span></span></div>`);
       send.disabled = true; window.scrollTo(0, document.body.scrollHeight);
@@ -449,6 +460,7 @@ views.ask = () => {
     ta.onkeydown = e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); go(ta.value); } };
     send.onclick = () => go(ta.value);
     app.querySelectorAll("[data-sug]").forEach(b => b.onclick = () => go(b.textContent));
+    aiAvailable().then(ok => { if (!ok && $("#key-tip")) $("#key-tip").hidden = false; });
     const ak = $("#add-key"); if (ak) ak.onclick = openSettings;
     $("#clear-chat").onclick = () => { chat = []; draw(); };
     draw();
@@ -460,7 +472,7 @@ views.ask = () => {
       <button class="link-btn" id="clear-chat">Clear</button>
     </div>
     <div id="ask-empty">
-      ${getKey() ? "" : `<div class="tip" style="margin-bottom:20px">Ask AI uses Google Gemini. <button class="link-btn" id="add-key">Add your free API key</button> to start.</div>`}
+      <div class="tip" id="key-tip" hidden style="margin-bottom:20px">Ask AI uses Google Gemini. <button class="link-btn" id="add-key">Add your free API key</button> to start.</div>
       <div class="suggest">${suggestions.map(s => `<button class="chip" data-sug>${esc(s)}</button>`).join("")}</div>
     </div>
     <div class="chat" id="chat" aria-live="polite"></div>
@@ -480,7 +492,7 @@ views.notes = () => {
       const text = ta.value.trim(); const out = $("#n-out");
       btn.disabled = true; btn.textContent = "Generating…";
       let result;
-      if (getKey()) {
+      if (await aiAvailable()) {
         try {
           const raw = await askGemini([{ role: "user", text: `Turn this material into study notes.\n\n"""${text.slice(0, 30000)}"""` }],
             "You are a finance professor writing concise study notes in Markdown. Use these sections as ### headings: Summary, Key concepts, Formulas, Real-world example, Revision checklist, Flashcards. In Flashcards, write 5 pairs exactly as:\n**Q:** question\n**A:** answer");
@@ -490,7 +502,7 @@ views.notes = () => {
       }
       if (!result) result = offlineNotes(text);
       out.innerHTML = `
-        <div class="section"><p class="eyebrow">${result.source === "Gemini" ? "Written by Gemini" : "Extracted offline · add a Gemini key for AI-written notes"}</p>
+        <div class="section"><p class="eyebrow">${result.source === "Gemini" ? "Written by Gemini" : "Extracted offline · AI notes are unavailable right now"}</p>
         <div class="prose md">${md(result.markdown)}</div></div>
         ${result.cards.length ? `<div class="section"><h2>Flashcards</h2><p class="muted small" style="margin:6px 0 18px">Tap a card to flip it.</p>
         <div class="grid">${result.cards.map(c => `<div class="flash" tabindex="0" role="button"><div class="flash-inner">
@@ -589,6 +601,14 @@ function openSettings() {
   const d = $("#settings"); $("#key-input").value = getKey(); d.showModal();
 }
 $("#settings-btn").onclick = openSettings;
+
+/* theme: follows the system until the visitor picks one */
+const themeBtn = $("#theme-btn");
+const isDark = () => (document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")) === "dark";
+const syncThemeBtn = () => { const d = isDark(); themeBtn.setAttribute("aria-label", d ? "Switch to light mode" : "Switch to dark mode"); themeBtn.title = themeBtn.getAttribute("aria-label"); themeBtn.querySelector(".sun").style.display = d ? "" : "none"; themeBtn.querySelector(".moon").style.display = d ? "none" : ""; };
+themeBtn.onclick = () => { const t = isDark() ? "light" : "dark"; document.documentElement.dataset.theme = t; store.set("theme", t); syncThemeBtn(); };
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncThemeBtn);
+syncThemeBtn();
 $("#settings").addEventListener("close", e => {
   const v = e.target.returnValue;
   if (v === "save") { setKey($("#key-input").value.trim()); toast(getKey() ? "Key saved in this browser" : "No key saved"); }

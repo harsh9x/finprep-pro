@@ -1,0 +1,7 @@
+name = "finprep-pro"
+pages_build_output_dir = "public"
+compatibility_date = "2026-11-01"
+
+[[kv_namespaces]]
+binding = "RATE"
+id = "215089801bda4a208cf90bad1add473d"

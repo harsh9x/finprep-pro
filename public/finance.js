@@ -125,7 +125,7 @@ const GLOSSARY = [
 
 export function offlineNotes(text) {
   const lower = text.toLowerCase();
-  const sentences = text.replace(/\s+/g, " ").split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(s => s.length > 40 && s.length < 400);
+  const sentences = text.replace(/\s+/g, " ").split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(s => s.length > 25 && s.length < 400);
   const topics = Object.entries(TOPICS).filter(([, t]) => t.some(x => lower.includes(x))).map(([k]) => k);
 
   // Score sentences by finance-term density so the summary picks the most substantive lines.
@@ -138,7 +138,7 @@ export function offlineNotes(text) {
   const md = [
     `### Summary${topics.length ? ` · ${topics.join(", ")}` : ""}`,
     top.slice(0, 3).map(x => x.s).join(" ") || "Not enough text to summarise. Try pasting more content.",
-    "### Key points", ...top.slice(3, 8).map(x => `- ${x.s}`),
+    ...(top.length > 3 ? ["### Key points", ...top.slice(3, 8).map(x => `- ${x.s}`)] : []),
     ...(formulas.length ? ["### Formulas", ...formulas.map(f => `- ${f}`)] : []),
     ...(numbers.length ? ["### Key figures", ...numbers.map(f => `- ${f}`)] : []),
   ].join("\n\n");
