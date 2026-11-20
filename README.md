@@ -12,22 +12,32 @@ Learn corporate finance, practise real interview questions, and sharpen your res
 - **Resume**: keyword, tool and quantification gaps for a target role, the weak bullets in your own resume, and a four-week plan.
 - **Careers**: six finance paths, with pay, skills, the interview format and what each firm calls the role.
 
+## AI setup
+
+AI works for every visitor through `functions/api/ai.js`, which keeps the Gemini key on the server and limits use to 30 requests per visitor and 1,000 in total per day (counted in Workers KV). Set the key once:
+
+```bash
+npx wrangler pages secret put GEMINI_API_KEY --project-name finprep-pro
+```
+
+Visitors can still add their own key in Settings for unlimited use.
+
 ## Privacy
 
-Everything runs in the browser. PDFs are parsed locally with pdf.js. The optional Gemini key is stored in `localStorage` and sent only to Google's API.
+Everything runs in the browser. PDFs are parsed locally with pdf.js. A visitor's own Gemini key, if they add one, is stored in `localStorage` and sent only to Google's API.
 
 ## Run locally
 
 ```bash
-python3 -m http.server 8788 -d public
+npx wrangler pages dev   # serves public/ and the /api/ai function
 ```
 
-Then open http://localhost:8788.
+Then open the URL it prints.
 
 ## Deploy
 
 ```bash
-npx wrangler pages deploy public --project-name finprep-pro
+npx wrangler pages deploy --branch main
 ```
 
 ## Structure
@@ -41,5 +51,7 @@ public/
   ai.js         Gemini client
   data.json     curriculum, questions, careers and role requirements
   _headers      security headers and CSP for Cloudflare Pages
+functions/api/ai.js  rate-limited Gemini proxy
+wrangler.toml        Pages config and KV binding
 legacy-streamlit/  the original Streamlit app, kept for reference
 ```
