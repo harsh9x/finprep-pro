@@ -51,7 +51,7 @@ async function readPdf(file) {
     await new Promise((res, rej) => {
       const s = document.createElement("script");
       s.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
-      s.onload = res; s.onerror = () => rej(new Error("Could not load the PDF reader."));
+      s.onload = res; s.onerror = () => rej(new Error("The PDF reader didn't load. Check your connection and try again."));
       document.head.append(s);
     });
     // Browsers block cross-origin workers, so load the worker through a same-origin blob URL.
@@ -73,7 +73,7 @@ function sourceInput(prefix, placeholder) {
     <div class="drop" id="${prefix}-drop" tabindex="0" role="button" aria-label="Upload a PDF">
       <input type="file" accept="application/pdf" id="${prefix}-file" hidden>
       <div style="font-size:15px">Drop a PDF here, or <span style="color:var(--accent)">browse</span></div>
-      <div class="small" id="${prefix}-status" style="margin-top:6px;color:var(--text-3)">The file is read in your browser and never uploaded.</div>
+      <div class="small" id="${prefix}-status" style="margin-top:6px;color:var(--text-3)">Your file stays on your device. Nothing is uploaded.</div>
     </div>
     <p class="small muted" style="text-align:center;margin:14px 0">or paste text</p>
     <textarea class="input" id="${prefix}-text" placeholder="${esc(placeholder)}"></textarea>`;
@@ -94,31 +94,81 @@ function bindSourceInput(root, prefix) {
   drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); load(e.dataTransfer.files[0]); };
 }
 
+
+/* ---------- navigation ---------- */
+const ic = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const ICONS = {
+  home: ic('<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>'),
+  learn: ic('<path d="M4 19.5V5a2 2 0 0 1 2-2h14v15H6a2 2 0 0 0-2 2zm0 0A2 2 0 0 0 6 22h14"/>'),
+  labs: ic('<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 12h2M14 12h2M8 16h2M14 16h2"/>'),
+  notes: ic('<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/>'),
+  questions: ic('<path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12z"/>'),
+  ask: ic('<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>'),
+  resume: ic('<rect x="5" y="3" width="14" height="18" rx="2"/><circle cx="12" cy="9" r="2.5"/><path d="M8.5 16a3.5 3.5 0 0 1 7 0"/>'),
+  careers: ic('<circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/>'),
+  practise: ic('<path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4"/>'),
+  career: ic('<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"/>'),
+};
+const NAV = [
+  { id: "learn", label: "Learn", items: [["learn", "Lessons"], ["labs", "Labs"], ["notes", "Notes"]] },
+  { id: "practise", label: "Practice", items: [["questions", "Interview"], ["ask", "Ask AI"]] },
+  { id: "career", label: "Career", items: [["resume", "Resume check"], ["careers", "Career paths"]] },
+];
+const LABEL = Object.fromEntries(NAV.flatMap(g => g.items));
+const groupOf = r => NAV.find(g => g.items.some(([id]) => id === r));
+
+function renderNav(route) {
+  const g = groupOf(route);
+  $("#side-nav").innerHTML = `
+    <div class="nav-group"><a class="nav-item ${!route ? "active" : ""}" href="#/" ${!route ? 'aria-current="page"' : ""}>${ICONS.home}Home</a></div>
+    ${NAV.map(gr => `<div class="nav-group"><h4>${gr.label}</h4>${gr.items.map(([id, l]) =>
+      `<a class="nav-item ${id === route ? "active" : ""}" href="#/${id}" ${id === route ? 'aria-current="page"' : ""}>${ICONS[id]}${l}</a>`).join("")}</div>`).join("")}`;
+  $("#tabbar").innerHTML = [["", "Home", "home"], ...NAV.map(gr => [gr.items[0][0], gr.label, gr.id])].map(([href, l, icon]) => {
+    const on = href ? g?.id === icon : !route;
+    return `<a href="#/${href}" class="${on ? "active" : ""}" ${on ? 'aria-current="page"' : ""}>${ICONS[icon]}${l}</a>`;
+  }).join("");
+}
+
+/** Phone-only switcher between the pages of the current group. */
+const subnav = route => {
+  const g = groupOf(route);
+  return g ? `<div class="segmented subnav" role="navigation" aria-label="${g.label}">${g.items.map(([id, l]) => `<a href="#/${id}" class="${id === route ? "on" : ""}" style="text-decoration:none">${l}</a>`).join("")}</div>` : "";
+};
+const remember = (label, sub) => store.set("last", { hash: location.hash, label, sub });
+
 /* ---------- views ---------- */
 const views = {};
 
 views.home = () => {
-  const tiles = [
-    ["learn", "📘", "Learn", `${DATA.MODULES.length} modules from the three statements to LBOs.`],
-    ["labs", "🧮", "Labs", "Five live models: depreciation, DCF, working capital, variance and LBO."],
-    ["questions", "🎙️", "Interview", `${DATA.INTERVIEW_QUESTIONS.length} real questions with model answers and a script to say out loud.`],
-    ["ask", "✦", "Ask AI", "A patient finance tutor for any question."],
-    ["notes", "📝", "Notes", "Turn a 10-K or lecture PDF into study notes and flashcards."],
-    ["resume", "📄", "Resume", "See how your resume reads for the role you want."],
-    ["careers", "🧭", "Careers", "Six finance paths, with pay, skills and what the interviews test."],
+  const done = store.get("done", []), last = store.get("last", null), practised = store.get("practised", []);
+  const nextMod = DATA.MODULES.find(m => !done.includes(m.id)) || DATA.MODULES[0];
+  const steps = [
+    { n: 1, title: "Learn the basics", text: `Start with ${stripModule(nextMod.title)}.`, href: `#/learn/${nextMod.id}`, cta: done.length ? `${done.length} of ${DATA.MODULES.length} done ›` : "Start lesson ›", done: done.length === DATA.MODULES.length },
+    { n: 2, title: "Try it in a lab", text: "Move a slider and watch a real model respond.", href: "#/labs", cta: "Open labs ›", done: false },
+    { n: 3, title: "Practice out loud", text: "Answer real Big 4 and bank questions against the clock.", href: "#/questions", cta: practised.length ? `${practised.length} practiced ›` : "Start practicing ›", done: practised.length >= DATA.INTERVIEW_QUESTIONS.length },
   ];
   return `
     <section class="hero">
       <h1>Finance.<br>Mastered.</h1>
-      <p>Learn the concepts, practise the questions, and walk into your interview ready.</p>
-      <div class="row" style="justify-content:center;margin-top:30px">
-        <a class="btn" href="#/learn">Start learning</a>
-        <a class="link-btn" href="#/questions" style="font-size:17px">Practise questions ›</a>
-      </div>
+      <p>Learn the concepts. Practice the questions. Walk into your interview ready.</p>
     </section>
-    <div class="grid">${tiles.map(([r, i, t, d]) => `
-      <a class="card" href="#/${r}"><span class="tile-icon" aria-hidden="true">${i}</span><h3>${t}</h3><p>${d}</p></a>`).join("")}
-    </div>`;
+    ${last ? `<a class="continue" href="${esc(last.hash)}"><div><small>Continue where you left off</small><b>${esc(last.label)}</b>${last.sub ? `<small style="margin-top:2px">${esc(last.sub)}</small>` : ""}</div><span style="font-size:24px" aria-hidden="true">›</span></a>` : ""}
+    <h2 style="margin-bottom:16px">${last ? "Your path" : "Start here"}</h2>
+    <div class="steps">${steps.map(st => `
+      <a class="card ${st.done ? "done" : ""}" href="${st.href}"><div class="step-n">${st.done ? "✓" : st.n}</div><h3>${st.title}</h3><p>${esc(st.text)}</p><div class="more">${st.cta}</div></a>`).join("")}
+    </div>
+    ${NAV.map(g => `
+      <div class="section"><h2 style="font-size:22px">${g.label}</h2><div class="grid" style="margin-top:14px">${g.items.map(([id, l]) => `
+        <a class="card" href="#/${id}" style="padding:22px"><div class="row" style="gap:12px;flex-wrap:nowrap"><span style="width:22px;color:var(--accent);flex-shrink:0">${ICONS[id]}</span><h3 style="margin:0">${l}</h3></div><p style="margin-top:8px">${HOME_BLURB[id]()}</p></a>`).join("")}</div></div>`).join("")}`;
+};
+const HOME_BLURB = {
+  learn: () => `${DATA.MODULES.length} modules, from the three statements to LBOs.`,
+  labs: () => "Five live models: depreciation, DCF, working capital, variance and LBO.",
+  notes: () => "Turn a 10-K or lecture PDF into notes and flashcards.",
+  questions: () => `${DATA.INTERVIEW_QUESTIONS.length} real questions with model answers and a script to say out loud.`,
+  ask: () => "A patient finance tutor for any question.",
+  resume: () => "See how your resume reads for the role you want.",
+  careers: () => "Six finance careers: pay, skills and how they interview.",
 };
 
 views.learn = (id) => {
@@ -128,6 +178,7 @@ views.learn = (id) => {
     const m = DATA.MODULES[i];
     if (!m) return views.learn();
     const next = DATA.MODULES[i + 1];
+    remember(stripModule(m.title), `Lessons · Module ${i + 1}`);
     setTimeout(() => {
       $("#mark").onclick = () => {
         const d = new Set(store.get("done", [])); d.has(m.id) ? d.delete(m.id) : d.add(m.id); store.set("done", [...d]);
@@ -161,8 +212,8 @@ views.learn = (id) => {
   }
   return `
     <div class="page-head">
-      <h1>Learn</h1>
-      <p>Six modules, in order, from first principles to deal modeling. ${done.length ? `You've completed ${done.length} of ${DATA.MODULES.length}.` : ""}</p>
+      <h1>Lessons</h1>
+      <p>Six modules, from first principles to deal modeling. Take them in order. ${done.length ? `${done.length} of ${DATA.MODULES.length} complete.` : ""}</p>
     </div>
     <div class="grid">${DATA.MODULES.map((m, i) => `
       <a class="card" href="#/learn/${m.id}">
@@ -228,7 +279,7 @@ const LABS = {
     ],
     render: ({ g, m, w, tg, base, tax, cx, nwc, da, cash, debt, sh }) => {
       const r = dcf({ growth: g, margin: m, wacc: w, tg, base, tax, capex: cx, nwc, da, cash, debt, shares: sh });
-      if (!r.valid) return `<div class="panel"><h3>Terminal growth must be below WACC</h3><p class="muted" style="margin-top:6px">Otherwise the Gordon growth formula divides by zero or a negative number, and the business is worth infinity.</p></div>`;
+      if (!r.valid) return `<div class="panel"><h3>Terminal growth must be below WACC</h3><p class="muted" style="margin-top:6px">If it isn't, the terminal value formula breaks and the value becomes infinite or negative. Lower terminal growth or raise WACC.</p></div>`;
       return `
         <div class="stats">
           <div class="stat"><div class="k">Enterprise value</div><div class="v">${money(r.ev)}M</div></div>
@@ -260,14 +311,14 @@ const LABS = {
         <div class="stats"><div class="stat hl"><div class="k">Cash conversion cycle</div><div class="v">${c} days</div></div></div>
         <div class="formula">CCC = DIO + DSO − DPO = ${dio} + ${dso} − ${dpo} = ${c}</div>
         <p class="note-line">${c < 0
-          ? "Negative cycle: suppliers fund the business. Customers pay before suppliers are paid, the way Amazon and Apple run."
-          : c < 30 ? "A tight cycle. Little cash is tied up in operations."
-          : "Cash is tied up for a while. Cutting inventory days or collecting faster would free up cash."}</p>`;
+          ? "A negative cycle means suppliers fund the business: customers pay before suppliers are paid. Amazon and Apple run this way."
+          : c < 30 ? "A tight cycle. Very little cash is tied up in operations."
+          : "Cash is tied up for a while. Holding less inventory or collecting faster would free it up."}</p>`;
     },
   },
   bva: {
     name: "Variance", title: "Budget vs. actual",
-    blurb: "An FP&A variance bridge from budget to actual EBITDA. Revenue above budget is favourable; costs above budget are not.",
+    blurb: "See what moved EBITDA from budget to actual. Revenue above budget is favorable; costs above budget are unfavorable.",
     sliders: [
       { id: "br", label: "Budget revenue", min: 100, max: 1000, step: 5, value: 500, fmt: usd },
       { id: "ar", label: "Actual revenue", min: 100, max: 1000, step: 5, value: 475, fmt: usd },
@@ -318,7 +369,7 @@ const LABS = {
           <tr><td>Exit enterprise value</td><td>${money(r.exitEv, 0)}M</td></tr>
           <tr class="total"><td>Exit debt</td><td>${money(r.debtOut, 0)}M</td></tr>
         </table></div>
-        <p class="note-line">${r.irr >= 20 ? "That clears the typical 20%+ PE hurdle." : "Below the typical 20% PE hurdle. Try more leverage, a higher exit multiple or more EBITDA growth."}</p>`;
+        <p class="note-line">${r.irr >= 20 ? "That clears the typical 20%+ PE hurdle." : "That's below the typical 20% PE hurdle. Try more debt, a higher exit multiple or more EBITDA growth."}</p>`;
     },
   },
 };
@@ -365,7 +416,7 @@ views.questions = (id) => {
         <a class="q-item" href="#/questions/${q.id}">
           <div class="sub">${esc(q.company)} · ${esc(q.topic)} · ${esc(q.difficulty.split(" /")[0])}</div>
           <div class="q">${esc(q.question)}</div>
-        </a>`).join("") : `<p class="muted" style="padding:40px 0;text-align:center">No questions match. Try a different word or clear the filters.</p>`;
+        </a>`).join("") : `<p class="muted" style="padding:40px 0;text-align:center">No matches. Try another word, or clear the filters.</p>`;
       $("#q-count").textContent = `${hits.length} of ${Q.length}`;
       app.querySelectorAll(".chip").forEach(c => c.classList.toggle("on", st[c.dataset.k] === c.dataset.v));
     };
@@ -374,7 +425,7 @@ views.questions = (id) => {
     draw();
   });
   return `
-    <div class="page-head"><h1>Interview</h1><p>Real questions from the Big 4, banks and big tech, each with a model answer, a script to say out loud, and the trap to avoid.</p></div>
+    <div class="page-head"><h1>Interview</h1><p>Real questions from the Big 4, banks and big tech. Each one comes with a model answer, a script to say out loud, and the mistake to avoid.</p></div>
     <input class="input search" id="q-search" placeholder="Search by company, topic or keyword" aria-label="Search questions">
     <div class="chips" style="margin-top:16px">${roles.map(r => `<button class="chip" data-k="role" data-v="${esc(r)}">${esc(r)}</button>`).join("")}</div>
     <div class="chips" style="margin-top:8px">${companies.map(c => `<button class="chip" data-k="co" data-v="${esc(c)}">${esc(c)}</button>`).join("")}</div>
@@ -385,13 +436,15 @@ views.questions = (id) => {
 function questionDetail(q) {
   if (!q) return views.questions();
   const Q = DATA.INTERVIEW_QUESTIONS, i = Q.indexOf(q), next = Q[(i + 1) % Q.length];
+  remember(q.question.length > 70 ? q.question.slice(0, 68) + "…" : q.question, `Interview · ${q.company}`);
+  { const p = new Set(store.get("practised", [])); p.add(q.id); store.set("practised", [...p]); }
   const script = esc(q.spoken_script).replace(/\[([^\]]+)\]/g, '<span class="cue">[$1]</span>');
   const panes = {
     answer: `<div class="prose">${esc(q.written_answer)}</div>`,
     say: `<div class="script">${script}</div>
       <div class="section"><h3 style="margin-bottom:12px">Delivery cues</h3><ul class="lesson" style="padding:0;border:0"><ul style="margin:0">${q.vocal_cues.map(c => `<li>${esc(c)}</li>`).join("")}</ul></ul></div>
       <div class="panel section" style="text-align:center">
-        <p class="muted small">Answer out loud. Aim for about 60 seconds.</p>
+        <p class="muted small">Say your answer out loud. Aim for about 60 seconds.</p>
         <div class="timer" id="timer">0:00</div>
         <button class="btn" id="timer-btn" style="margin-top:12px">Start</button>
       </div>`,
@@ -413,7 +466,7 @@ function questionDetail(q) {
     };
   };
   setTimeout(() => {
-    $("#q-tabs").append(segmented([["answer", "Answer"], ["say", "Say it"], ["trap", "Traps"]], "answer", k => {
+    $("#q-tabs").append(segmented([["answer", "Answer"], ["say", "Say it"], ["trap", "Mistakes"]], "answer", k => {
       clearInterval(timer); timer = null; $("#q-pane").innerHTML = panes[k]; bindTimer();
     }));
   });
@@ -445,7 +498,7 @@ views.ask = () => {
     };
     const go = async text => {
       text = text.trim(); if (!text) return;
-      if (!(await aiAvailable())) { openSettings(); toast("Add a Gemini key to use Ask AI"); return; }
+      if (!(await aiAvailable())) { openSettings(); toast("Add a Gemini key in Settings to use AI"); return; }
       chat.push({ role: "user", text }); ta.value = ""; ta.style.height = ""; draw();
       box.insertAdjacentHTML("beforeend", `<div class="msg ai typing" id="typing"><span></span><span></span><span></span></div>`);
       send.disabled = true; window.scrollTo(0, document.body.scrollHeight);
@@ -468,7 +521,7 @@ views.ask = () => {
   });
   return `
     <div class="page-head row" style="justify-content:space-between;align-items:flex-end">
-      <div><h1>Ask AI</h1><p>${ctx ? `About: ${esc(ctx.title)}` : "Ask anything about finance, from basic accounting to LBO math."}</p></div>
+      <div><h1>Ask AI</h1><p>${ctx ? `About: ${esc(ctx.title)}` : "Ask anything, from basic accounting to LBO math."}</p></div>
       <button class="link-btn" id="clear-chat">Clear</button>
     </div>
     <div id="ask-empty">
@@ -502,7 +555,7 @@ views.notes = () => {
       }
       if (!result) result = offlineNotes(text);
       out.innerHTML = `
-        <div class="section"><p class="eyebrow">${result.source === "Gemini" ? "Written by Gemini" : "Extracted offline · AI notes are unavailable right now"}</p>
+        <div class="section"><p class="eyebrow">${result.source === "Gemini" ? "Written by Gemini" : "Quick summary · AI notes aren't available right now"}</p>
         <div class="prose md">${md(result.markdown)}</div></div>
         ${result.cards.length ? `<div class="section"><h2>Flashcards</h2><p class="muted small" style="margin:6px 0 18px">Tap a card to flip it.</p>
         <div class="grid">${result.cards.map(c => `<div class="flash" tabindex="0" role="button"><div class="flash-inner">
@@ -514,7 +567,7 @@ views.notes = () => {
     };
   });
   return `
-    <div class="page-head"><h1>Notes</h1><p>Turn a 10-K, research report or lecture into study notes and flashcards.</p></div>
+    <div class="page-head"><h1>Notes</h1><p>Turn a 10-K, a research report or a lecture into study notes and flashcards.</p></div>
     ${sourceInput("n", "Paste lecture notes, a report or any finance text…")}
     <div class="row" style="margin-top:18px"><button class="btn" id="n-go" disabled>Generate notes</button></div>
     <div id="n-out"></div>`;
@@ -537,26 +590,26 @@ views.resume = () => {
             <circle cx="80" cy="80" r="70" stroke="${col}" stroke-width="12" fill="none" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - r.score / 100)}" style="transition:stroke-dashoffset 1s"/></svg>
             <div class="val">${r.score}</div></div>
           <div><h2>Match for ${esc(r.role)}</h2>
-            <p class="muted" style="margin-top:8px">${r.score >= 70 ? "Strong fit. Polish the gaps below and you're ready." : r.score >= 45 ? "A good base. Closing the gaps below will lift this quickly." : "There's work to do. Start with the missing keywords and add numbers to your bullets."}</p>
+            <p class="muted" style="margin-top:8px">${r.score >= 70 ? "Strong fit. Close the few gaps below and you're ready." : r.score >= 45 ? "A good base. Closing the gaps below will lift this quickly." : "Room to grow. Start with the missing keywords, then add numbers to your bullets."}</p>
             <div class="stats" style="margin:18px 0 0"><div class="stat"><div class="k">Keywords</div><div class="v">${r.kwScore}%</div></div>
             <div class="stat"><div class="k">Quantified results</div><div class="v">${r.metrics}</div></div>
             <div class="stat"><div class="k">Strong verbs</div><div class="v">${r.verbs.length}</div></div></div>
           </div>
         </div>
-        <div class="section"><h3>Role keywords</h3><p class="muted small" style="margin:4px 0 12px">Green ones are on your resume; red ones are missing.</p>${kw(r.foundKw, r.missingKw)}</div>
+        <div class="section"><h3>Role keywords</h3><p class="muted small" style="margin:4px 0 12px">Green is on your resume. Red is missing.</p>${kw(r.foundKw, r.missingKw)}</div>
         <div class="section"><h3>Tools</h3><div style="margin-top:12px">${kw(r.foundTools, r.missingTools)}</div></div>
         <div class="section"><h3>Modeling skills</h3><div style="margin-top:12px">${kw(r.foundModel, r.missingModel)}</div></div>
-        ${r.weakBullets.length ? `<div class="section"><h2>Bullets to rewrite</h2><p class="muted" style="margin:6px 0 18px">These lines start weakly or have no numbers. Use: <b>Accomplished X, measured by Y, by doing Z.</b></p>
+        ${r.weakBullets.length ? `<div class="section"><h2>Bullets to rewrite</h2><p class="muted" style="margin:6px 0 18px">These lines start weakly or have no numbers. Try this pattern: <b>Accomplished X, measured by Y, by doing Z.</b></p>
           <div class="q-list">${r.weakBullets.map(b => `<div class="q-item"><div class="q" style="font-weight:400">${esc(b.text)}</div><div class="sub" style="margin-top:8px">${esc(b.why)}</div></div>`).join("")}</div></div>` : ""}
         <div class="section"><h2>Your four-week plan</h2><div class="grid" style="margin-top:18px">${r.plan.map((p, i) => `<div class="card"><div class="meta">Week ${i + 1}</div><h3>${esc(p.title)}</h3><p>${esc(p.action)}</p></div>`).join("")}</div></div>`;
       $("#r-out").scrollIntoView({ behavior: "smooth" });
     };
   });
   return `
-    <div class="page-head"><h1>Resume</h1><p>See how your resume reads for the role you want, and what to fix first.</p></div>
+    <div class="page-head"><h1>Resume check</h1><p>See how your resume reads for the role you want, and what to fix first.</p></div>
     <label class="field"><span>Target role</span><select class="input" id="r-role">${roles.map(r => `<option>${esc(r)}</option>`).join("")}</select></label>
     ${sourceInput("r", "Paste your resume text…")}
-    <div class="row" style="margin-top:18px"><button class="btn" id="r-go" disabled>Analyse resume</button></div>
+    <div class="row" style="margin-top:18px"><button class="btn" id="r-go" disabled>Analyze resume</button></div>
     <div id="r-out"></div>`;
 };
 
@@ -577,10 +630,10 @@ views.careers = (id) => {
         <div class="card"><h3>Soft skills</h3><ul class="lesson" style="padding:0;border:0"><ul style="margin-top:12px">${c.soft_skills.map(s => `<li style="font-size:15px">${esc(s)}</li>`).join("")}</ul></ul></div>
       </div>
       <div class="section"><h2>What firms call it</h2><div class="table-wrap" style="margin-top:12px"><table>${Object.entries(c.company_titles).map(([k, v]) => `<tr><td>${esc(k)}</td><td style="text-align:left">${esc(v)}</td></tr>`).join("")}</table></div></div>
-      <div class="row" style="justify-content:space-between;margin-top:48px"><a href="#/careers">‹ All careers</a>${roleKey ? `<button class="btn" id="practise">Practise these questions</button>` : ""}</div>`;
+      <div class="row" style="justify-content:space-between;margin-top:48px"><a href="#/careers">‹ All careers</a>${roleKey ? `<button class="btn" id="practise">Practice these questions</button>` : ""}</div>`;
   }
   return `
-    <div class="page-head"><h1>Careers</h1><p>Six finance paths, with what they pay, what the work is like, and how they interview.</p></div>
+    <div class="page-head"><h1>Career paths</h1><p>Six finance careers: what they pay, what the work is like and how they interview.</p></div>
     <div class="grid">${C.map(c => `
       <a class="card" href="#/careers/${c.id}"><div class="meta">${esc(c.category)}</div><h3>${esc(c.title)}</h3><p>${esc(c.overview)}</p><div class="more">${esc(c.comp_band.split(" Base")[0])} ›</div></a>`).join("")}
     </div>`;
@@ -589,11 +642,19 @@ views.careers = (id) => {
 /* ---------- router ---------- */
 function route() {
   const [, name = "", arg] = location.hash.replace(/^#/, "").split("/");
-  const view = views[name] || views.home;
-  app.innerHTML = `<div class="view">${view(arg)}</div>`;
-  document.querySelectorAll(".nav-links a").forEach(a => a.classList.toggle("active", a.getAttribute("href") === `#/${name}`));
-  const titles = { learn: "Learn", labs: "Labs", questions: "Interview", ask: "Ask AI", notes: "Notes", resume: "Resume", careers: "Careers" };
-  document.title = titles[name] ? `${titles[name]} · FinPrep Pro` : "FinPrep Pro";
+  const known = views[name] && name !== "home";
+  const key = known ? name : "";
+  const view = known ? views[name] : views.home;
+  let crumb = "";
+  if (known && arg) {
+    const sub = name === "learn" ? DATA.MODULES.find(m => m.id === arg)?.title.match(/Module \d+/)?.[0]
+      : name === "questions" ? DATA.INTERVIEW_QUESTIONS.find(q => q.id === arg)?.company
+      : name === "careers" ? DATA.CAREER_ROLES.find(c => c.id === arg)?.category : "";
+    if (name !== "labs") crumb = `<a class="crumb" href="#/${name}">‹ ${LABEL[name]}${sub ? ` <span>/ ${esc(sub)}</span>` : ""}</a>`;
+  }
+  app.innerHTML = `<div class="view">${key ? subnav(key) : ""}${crumb}${view(arg)}</div>`;
+  renderNav(key);
+  document.title = key ? `${LABEL[key]} · FinPrep Pro` : "FinPrep Pro";
   window.scrollTo(0, 0);
 }
 
@@ -611,7 +672,7 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncThemeB
 syncThemeBtn();
 $("#settings").addEventListener("close", e => {
   const v = e.target.returnValue;
-  if (v === "save") { setKey($("#key-input").value.trim()); toast(getKey() ? "Key saved in this browser" : "No key saved"); }
+  if (v === "save") { setKey($("#key-input").value.trim()); toast(getKey() ? "Key saved to this browser" : "No key saved"); }
   if (v === "clear") { setKey(""); toast("Key removed"); }
   if (location.hash.startsWith("#/ask")) route();
 });

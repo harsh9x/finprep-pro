@@ -82,16 +82,16 @@ export function analyzeResume(text, role, reqs) {
       const weak = WEAK_OPENERS.test(l), noNum = !new RegExp(METRIC.source, "i").test(l);
       if (!weak && !noNum) return null;
       if (!weak && !VERBS.some(v => l.toLowerCase().startsWith(v)) && l.split(" ").length < 8) return null;
-      return { text: l, why: weak ? "Starts passively. Lead with a strong verb like Built, Modelled or Reduced." : "No number. Add a $, % or time figure to show scale." };
+      return { text: l, why: weak ? "Starts passively. Lead with a strong verb like Built, Modeled or Reduced." : "No numbers. Add a $, % or time figure to show scale." };
     })
     .filter(Boolean).slice(0, 4);
 
   const first = (arr, n, fallback) => arr.length ? arr.slice(0, n).join(", ") : fallback;
   const plan = [
-    { title: "Close the keyword gaps", action: `Learn and add evidence for: ${first(missingKw, 3, "your core keywords are covered, so deepen them with examples")}. Practise the $10 depreciation walk until it's effortless.` },
+    { title: "Close the keyword gaps", action: `Learn and add evidence for: ${first(missingKw, 3, "your core keywords are covered, so deepen them with examples")}. Practice the $10 depreciation walk until it's effortless.` },
     { title: "Show your tools", action: `Build a small project using ${first(missingTools, 2, "the tools you already list")} and put a number on every resume bullet.` },
     { title: "Model it yourself", action: `Build a DCF from a blank sheet, then ${first(missingModel, 2, "a sensitivity table")}. Use the Labs to check your intuition.` },
-    { title: "Rehearse out loud", action: "Answer five Interview questions a day using the Say it script and the 60-second timer. Record yourself once and cut filler words." },
+    { title: "Rehearse out loud", action: "Answer five interview questions a day with the Say it script and the 60-second timer. Record yourself once and cut the filler words." },
   ];
 
   return { role, score: Math.max(10, Math.min(98, score)), kwScore, foundKw, missingKw, foundTools, missingTools, foundModel, missingModel, metrics, verbs, weakBullets, plan };

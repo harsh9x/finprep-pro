@@ -1,12 +1,12 @@
 # FinPrep Pro
 
-Learn corporate finance, practise real interview questions, and sharpen your resume. A fast, minimalist static web app hosted on Cloudflare Pages.
+Learn corporate finance, practice real interview questions, and sharpen your resume. A fast, minimalist static web app hosted on Cloudflare Pages.
 
 ## Sections
 
 - **Learn**: six modules, from the three statements to M&A and LBOs, with progress saved in your browser.
 - **Labs**: five live models (the $10 depreciation walk, a 5-year DCF, cash conversion cycle, budget vs. actual, and LBO returns).
-- **Interview**: 15 questions from the Big 4, banks and big tech. Each has a model answer, a script to say out loud with a 60-second timer, and the common trap.
+- **Interview**: 15 questions from the Big 4, banks and big tech. Each has a model answer, a script to say out loud with a 60-second timer, and the common mistake.
 - **Ask AI**: a finance tutor built on Google Gemini. You can ask about any lesson.
 - **Notes**: turn a PDF or pasted text into study notes and flashcards. Works offline, and Gemini writes them if you add a key.
 - **Resume**: keyword, tool and quantification gaps for a target role, the weak bullets in your own resume, and a four-week plan.
